@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// ──────────────────────────────
+// Chat App Models
+// ──────────────────────────────
+
+model Shop {
+  id              String         @id @default(uuid())
+  domain          String         @unique   // e.g. my-store.myshopify.com
+  name            String?
+  chatEnabled     Boolean        @default(true)
+  welcomeMessage  String         @default("Hi there! How can we help you?")
+  brandColor      String         @default("#4F46E5")
+  position        String         @default("bottom-right") // bottom-right | bottom-left
+  offlineMessage  String         @default("We're offline right now. Leave a message!")
+  autoReply       String?        // optional auto-reply when no agent online
+  businessHours   String?        // JSON string like {"mon":"9-17","tue":"9-17"...}
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  conversations   Conversation[]
+  agents          Agent[]
+}
+
+model Agent {
+  id        String    @id @default(uuid())
+  shopId    String
+  name      String
+  email     String
+  avatar    String?
+  role      String    @default("support") // support | admin
+  isOnline  Boolean   @default(false)
+  lastSeen  DateTime?
+  createdAt DateTime  @default(now())
+
+  shop      Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@unique([shopId, email])
+}
+
+model Conversation {
+  id              String    @id @default(uuid())
+  shopId          String
+  customerName    String    @default("Visitor")
+  customerEmail   String?
+  status          String    @default("open") // open | assigned | closed
+  assignedAgentId String?
+  lastMessageAt   DateTime  @default(now())
+  metadata        String?   // JSON string for extra info (page URL, browser, etc.)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop            Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  messages        Message[]
+
+  @@index([shopId, status])
+  @@index([shopId, lastMessageAt])
+}
+
+model Message {
+  id               String   @id @default(uuid())
+  conversationId   String
+  senderType       String   // customer | agent | system
+  agentId          String?
+  content          String
+  isRead           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agent            Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+}

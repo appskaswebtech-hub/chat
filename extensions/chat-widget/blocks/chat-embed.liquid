@@ -1,0 +1,41 @@
+{% if block.settings.enable_chat %}
+<script>
+  window.__QUIKCHAT = {
+    appUrl: "{{ app.metafields.quikchat.app_url | default: 'https://your-app-url.com' }}",
+    color: "{{ block.settings.brand_color }}",
+    position: "{{ block.settings.position }}"
+  };
+</script>
+<script src="{{ 'chat-widget.js' | asset_url }}" defer></script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "QuikChat Widget",
+  "target": "body",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "enable_chat",
+      "label": "Enable Chat Widget",
+      "default": true
+    },
+    {
+      "type": "color",
+      "id": "brand_color",
+      "label": "Brand Color",
+      "default": "#4F46E5"
+    },
+    {
+      "type": "select",
+      "id": "position",
+      "label": "Widget Position",
+      "options": [
+        { "value": "bottom-right", "label": "Bottom Right" },
+        { "value": "bottom-left", "label": "Bottom Left" }
+      ],
+      "default": "bottom-right"
+    }
+  ]
+}
+{% endschema %}
