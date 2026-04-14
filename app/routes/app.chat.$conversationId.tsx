@@ -84,17 +84,31 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   if (intent === "close-conversation") {
+    await prisma.message.create({
+      data: {
+        conversationId,
+        senderType: "system",
+        content: "This conversation has been closed by support. Thank you for chatting with us!",
+      },
+    });
     await prisma.conversation.update({
       where: { id: conversationId },
-      data: { status: "closed" },
+      data: { status: "closed", lastMessageAt: new Date() },
     });
     return json({ success: true });
   }
 
   if (intent === "reopen-conversation") {
+    await prisma.message.create({
+      data: {
+        conversationId,
+        senderType: "system",
+        content: "Conversation reopened by support.",
+      },
+    });
     await prisma.conversation.update({
       where: { id: conversationId },
-      data: { status: "open" },
+      data: { status: "open", lastMessageAt: new Date() },
     });
     return json({ success: true });
   }

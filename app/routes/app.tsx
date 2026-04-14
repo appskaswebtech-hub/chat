@@ -25,7 +25,7 @@ export default function App() {
           Home
         </Link>
         <Link to="/app/chat">Chat Support</Link>
-        <Link to="/app/chat-settings">Chat Settings</Link>
+        <Link to="/app/chat-settings">Chat Support</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>

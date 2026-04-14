@@ -2,7 +2,7 @@
 
 client_id = "d5491ebe90429bfc8b66f867f572f09e"
 name = "Convobridge"
-application_url = "https://later-combining-suggestions-implications.trycloudflare.com"
+application_url = "https://pirates-elder-spokesman-consult.trycloudflare.com"
 embedded = true
 
 [build]
@@ -24,9 +24,9 @@ api_version = "2026-07"
 scopes = "write_products"
 
 [auth]
-redirect_urls = [ "https://later-combining-suggestions-implications.trycloudflare.com/api/auth" ]
+redirect_urls = [ "https://pirates-elder-spokesman-consult.trycloudflare.com/api/auth" ]
 
 [app_proxy]
-url = "https://later-combining-suggestions-implications.trycloudflare.com/proxy"
+url = "https://pirates-elder-spokesman-consult.trycloudflare.com/proxy"
 prefix = "apps"
 subpath = "chat"

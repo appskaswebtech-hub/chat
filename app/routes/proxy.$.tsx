@@ -79,6 +79,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     const after = query.get("after");
 
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { status: true },
+    });
+
+    if (!conversation) {
+      return json({ error: "Conversation not found", status: "not_found" }, { status: 404 });
+    }
+
     const messages = await prisma.message.findMany({
       where: {
         conversationId,
@@ -93,7 +102,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       },
     });
 
-    return json({ messages });
+    return json({ messages, status: conversation.status });
   }
 
   return json({ error: "Unknown action" }, { status: 400 });

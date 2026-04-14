@@ -3,7 +3,7 @@
 var C=window.__QUIKCHAT||{},CLR=C.color||"#4F46E5",POS=C.position||"bottom-right",
 SHOP=window.Shopify&&window.Shopify.shop||"",
 API="/apps/chat",SK="qc_cid",R=POS==="bottom-right",
-cid=localStorage.getItem(SK),msgs=[],poll=null,open=false;
+cid=localStorage.getItem(SK),msgs=[],poll=null,open=false,chatStatus="open";
 
 function $(id){return document.getElementById(id)}
 function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML}
@@ -35,7 +35,7 @@ s.textContent=`
 .qm{max-width:78%;padding:9px 13px;border-radius:12px;font-size:14px;line-height:1.4;word-wrap:break-word}
 .qm-c{align-self:flex-end;background:${CLR};color:#fff;border-bottom-right-radius:3px}
 .qm-a{align-self:flex-start;background:#f3f4f6;color:#1f2937;border-bottom-left-radius:3px}
-.qm-s{align-self:center;color:#9ca3af;font-size:12px;padding:3px}
+.qm-s{align-self:center;color:#9ca3af;font-size:12px;padding:3px;background:transparent}
 .qm-t{font-size:11px;opacity:.6;margin-top:3px}
 #qc-p{flex:1;padding:20px;display:flex;flex-direction:column;gap:12px}
 #qc-p p{font-size:14px;color:#6b7280;line-height:1.5}
@@ -47,6 +47,10 @@ s.textContent=`
 #qc-mi{flex:1;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:18px;font-size:14px;outline:0}
 #qc-mi:focus{border-color:${CLR}}
 #qc-se{width:34px;height:34px;border-radius:50%;background:${CLR};color:#fff;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#qc-closed{padding:12px 16px;border-top:1px solid #e5e7eb;text-align:center;display:none}
+#qc-closed p{font-size:13px;color:#6b7280;margin-bottom:10px;line-height:1.4}
+#qc-newchat{padding:9px 18px;background:${CLR};color:#fff;border:0;border-radius:7px;font-size:14px;font-weight:600;cursor:pointer;width:100%}
+#qc-newchat:hover{opacity:.9}
 `;
 document.head.appendChild(s);
 
@@ -55,13 +59,15 @@ c.innerHTML=`<button id="qc-b" aria-label="Chat"><svg viewBox="0 0 24 24" width=
 <div id="qc-w"><div id="qc-h"><h3>Chat with us</h3><button id="qc-x">&times;</button></div>
 <div id="qc-p"><p>${esc(welcome)}</p><input class="qi" id="qc-n" placeholder="Your name"><input class="qi" id="qc-e" placeholder="Email (optional)" type="email"><textarea class="qi" id="qc-fm" placeholder="How can we help?" rows="3"></textarea><button id="qc-sb">Start Chat</button></div>
 <div id="qc-m" style="display:none"></div>
-<div id="qc-i" style="display:none"><input id="qc-mi" placeholder="Type a message..."><button id="qc-se"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button></div></div>`;
+<div id="qc-i" style="display:none"><input id="qc-mi" placeholder="Type a message..."><button id="qc-se"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button></div>
+<div id="qc-closed"><p>This conversation has been closed. Thank you for chatting with us!</p><button id="qc-newchat">Start New Chat</button></div></div>`;
 document.body.appendChild(c);
 
 $("qc-b").onclick=toggle;
 $("qc-x").onclick=toggle;
 $("qc-sb").onclick=start;
 $("qc-se").onclick=send;
+$("qc-newchat").onclick=newChat;
 $("qc-mi").onkeydown=function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}};
 }
 
@@ -69,6 +75,36 @@ function toggle(){
 open=!open;
 $("qc-w").style.display=open?"flex":"none";
 if(open&&cid){startPoll();scrollB()}else{stopPoll()}
+}
+
+function setClosed(){
+chatStatus="closed";
+$("qc-i").style.display="none";
+$("qc-closed").style.display="block";
+}
+
+function setOpen(){
+chatStatus="open";
+$("qc-i").style.display="flex";
+$("qc-closed").style.display="none";
+}
+
+function newChat(){
+cid=null;
+localStorage.removeItem(SK);
+msgs=[];
+chatStatus="open";
+$("qc-m").style.display="none";
+$("qc-m").innerHTML="";
+$("qc-i").style.display="none";
+$("qc-closed").style.display="none";
+$("qc-p").style.display="flex";
+$("qc-n").value="";
+$("qc-e").value="";
+$("qc-fm").value="";
+$("qc-sb").disabled=false;
+$("qc-sb").textContent="Start Chat";
+stopPoll();
 }
 
 async function start(){
@@ -81,13 +117,13 @@ try{
 var r=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},
 body:JSON.stringify({intent:"start",customerName:n,customerEmail:e,message:m,pageUrl:location.href})});
 var d=await r.json();
-if(d.conversationId){cid=d.conversationId;localStorage.setItem(SK,cid);showChat();await loadMsgs();startPoll()}
+if(d.conversationId){cid=d.conversationId;localStorage.setItem(SK,cid);showChat();setOpen();await loadMsgs();startPoll()}
 }catch(er){$("qc-sb").disabled=false;$("qc-sb").textContent="Start Chat"}
 }
 
 async function send(){
 var inp=$("qc-mi"),t=(inp.value||"").trim();
-if(!t||!cid)return;
+if(!t||!cid||chatStatus==="closed")return;
 addMsg("customer",t);inp.value="";
 try{await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},
 body:JSON.stringify({intent:"message",conversationId:cid,content:t})})}catch(e){}
@@ -96,7 +132,10 @@ body:JSON.stringify({intent:"message",conversationId:cid,content:t})})}catch(e){
 async function loadMsgs(){
 if(!cid)return;
 try{var r=await fetch(API+"?action=messages&conversationId="+cid);
-var d=await r.json();if(d.messages){msgs=d.messages;renderMsgs()}}catch(e){}
+var d=await r.json();
+if(d.messages){msgs=d.messages;renderMsgs()}
+if(d.status==="closed"){setClosed()}else{setOpen()}
+}catch(e){}
 }
 
 function renderMsgs(){
@@ -104,7 +143,7 @@ var c=$("qc-m");c.innerHTML="";
 msgs.forEach(function(m){
 var d=document.createElement("div");
 d.className="qm qm-"+(m.senderType==="customer"?"c":m.senderType==="agent"?"a":"s");
-d.innerHTML="<div>"+esc(m.content)+"</div><div class='qm-t'>"+tm(m.createdAt)+"</div>";
+d.innerHTML="<div>"+esc(m.content)+"</div>"+(m.senderType!=="system"?"<div class='qm-t'>"+tm(m.createdAt)+"</div>":"");
 c.appendChild(d)});
 scrollB()
 }
@@ -116,7 +155,7 @@ d.innerHTML="<div>"+esc(text)+"</div><div class='qm-t'>"+tm(new Date().toISOStri
 c.appendChild(d);scrollB()
 }
 
-function showChat(){$("qc-p").style.display="none";$("qc-m").style.display="flex";$("qc-i").style.display="flex"}
+function showChat(){$("qc-p").style.display="none";$("qc-m").style.display="flex"}
 function scrollB(){var c=$("qc-m");if(c)c.scrollTop=c.scrollHeight}
 
 function startPoll(){stopPoll();poll=setInterval(async function(){
@@ -124,6 +163,10 @@ if(!cid||!open)return;
 try{var af=msgs.length?msgs[msgs.length-1].createdAt:null,
 u=API+"?action=messages&conversationId="+cid+(af?"&after="+af:""),
 r=await fetch(u),d=await r.json();
+if(d.status==="closed"&&chatStatus!=="closed"){
+if(d.messages&&d.messages.length){msgs=msgs.concat(d.messages);renderMsgs()}
+setClosed();return}
+if(d.status==="open"&&chatStatus==="closed"){setOpen()}
 if(d.messages&&d.messages.length){
 var nw=d.messages.filter(function(m){return m.senderType!=="customer"});
 if(nw.length){msgs=msgs.concat(d.messages);renderMsgs()}
