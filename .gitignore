@@ -1,25 +1,27 @@
+# Dependencies
 node_modules
+ 
+# OS
 .DS_Store
-
+ 
+# Build outputs
 /.cache
 /build
 /app/build
 /public/build/
 /public/_dev
 /app/public/build
+/extensions/*/dist
+ 
+# Local database files
 /prisma/dev.sqlite
 /prisma/dev.sqlite-journal
 database.sqlite
-
+ 
+# Environment variables (NEVER commit secrets)
 .env
 .env.*
-
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-
-/extensions/*/dist
-
-# Ignore shopify files created during app dev
+ 
+# Shopify CLI local files
 .shopify/*
 .shopify.lock
