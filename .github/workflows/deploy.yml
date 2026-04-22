@@ -40,7 +40,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             echo "📦 Installing dependencies..."
-            npm ci
+            npm install
             echo "🔨 Building app..."
             npm run build
             echo "🚀 Restarting PM2..."
