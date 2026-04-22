@@ -86,6 +86,7 @@ model Conversation {
 
   shop            Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
   messages        Message[]
+  pushSubscriptions PushSubscription[]
 
   @@index([shopId, status])
   @@index([shopId, lastMessageAt])
@@ -104,4 +105,15 @@ model Message {
   agent            Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
 
   @@index([conversationId, createdAt])
+}
+
+model PushSubscription {
+  id             String   @id @default(uuid())
+  conversationId String
+  endpoint       String
+  p256dh         String
+  auth           String
+  createdAt      DateTime @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }

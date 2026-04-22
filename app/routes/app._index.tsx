@@ -1,27 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useNavigate } from "@remix-run/react";
-import {
-  Page,
-  Layout,
-  Card,
-  Text,
-  BlockStack,
-  InlineStack,
-  Box,
-  Badge,
-  Avatar,
-  Button,
-  Divider,
-  InlineGrid,
-  ProgressBar,
-} from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import dashboardStyles from "../styles/dashboard.css?url";
 
-// ─── LOADER: Fetch analytics data ───
+export const links = () => [{ rel: "stylesheet", href: dashboardStyles }];
+
+// ─── LOADER ───
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
@@ -34,658 +22,420 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const now = new Date();
-
-  // Today start
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-
-  // This week start (Monday)
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - now.getDay() + 1);
-  weekStart.setHours(0, 0, 0, 0);
-
-  // This month start
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay() + 1); weekStart.setHours(0, 0, 0, 0);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // Last 7 days for chart
-  const last7Days = new Date(now);
-  last7Days.setDate(now.getDate() - 6);
-  last7Days.setHours(0, 0, 0, 0);
+  const [
+    totalConversations, openConversations, closedConversations, totalMessages,
+    todayConversations, todayMessages, weekConversations, weekMessages,
+    monthConversations, customerMessages, agentMessages, unreadMessages,
+  ] = await Promise.all([
+    prisma.conversation.count({ where: { shopId: shop.id } }),
+    prisma.conversation.count({ where: { shopId: shop.id, status: "open" } }),
+    prisma.conversation.count({ where: { shopId: shop.id, status: "closed" } }),
+    prisma.message.count({ where: { conversation: { shopId: shop.id } } }),
+    prisma.conversation.count({ where: { shopId: shop.id, createdAt: { gte: todayStart } } }),
+    prisma.message.count({ where: { conversation: { shopId: shop.id }, createdAt: { gte: todayStart } } }),
+    prisma.conversation.count({ where: { shopId: shop.id, createdAt: { gte: weekStart } } }),
+    prisma.message.count({ where: { conversation: { shopId: shop.id }, createdAt: { gte: weekStart } } }),
+    prisma.conversation.count({ where: { shopId: shop.id, createdAt: { gte: monthStart } } }),
+    prisma.message.count({ where: { conversation: { shopId: shop.id }, senderType: "customer" } }),
+    prisma.message.count({ where: { conversation: { shopId: shop.id }, senderType: "agent" } }),
+    prisma.message.count({ where: { conversation: { shopId: shop.id }, senderType: "customer", isRead: false } }),
+  ]);
 
-  // ── Total stats ──
-  const totalConversations = await prisma.conversation.count({
-    where: { shopId: shop.id },
-  });
-
-
-  const openConversations = await prisma.conversation.count({
-    where: { shopId: shop.id, status: "open" },
-  });
-
-  const closedConversations = await prisma.conversation.count({
-    where: { shopId: shop.id, status: "closed" },
-  });
-
-  const totalMessages = await prisma.message.count({
-    where: { conversation: { shopId: shop.id } },
-  });
-
-  // ── Today stats ──
-  const todayConversations = await prisma.conversation.count({
-    where: { shopId: shop.id, createdAt: { gte: todayStart } },
-  });
-
-  const todayMessages = await prisma.message.count({
-    where: {
-      conversation: { shopId: shop.id },
-      createdAt: { gte: todayStart },
-    },
-  });
-
-  // ── This week stats ──
-  const weekConversations = await prisma.conversation.count({
-    where: { shopId: shop.id, createdAt: { gte: weekStart } },
-  });
-
-  const weekMessages = await prisma.message.count({
-    where: {
-      conversation: { shopId: shop.id },
-      createdAt: { gte: weekStart },
-    },
-  });
-
-  // ── This month stats ──
-  const monthConversations = await prisma.conversation.count({
-    where: { shopId: shop.id, createdAt: { gte: monthStart } },
-  });
-
-  // ── Customer vs Agent messages ──
-  const customerMessages = await prisma.message.count({
-    where: { conversation: { shopId: shop.id }, senderType: "customer" },
-  });
-
-  const agentMessages = await prisma.message.count({
-    where: { conversation: { shopId: shop.id }, senderType: "agent" },
-  });
-
-  // ── Unread messages ──
-  const unreadMessages = await prisma.message.count({
-    where: {
-      conversation: { shopId: shop.id },
-      senderType: "customer",
-      isRead: false,
-    },
-  });
-
-  // ── Daily conversations for last 7 days ──
   const dailyData = [];
   for (let i = 6; i >= 0; i--) {
-    const dayStart = new Date(now);
-    dayStart.setDate(now.getDate() - i);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    const count = await prisma.conversation.count({
-      where: {
-        shopId: shop.id,
-        createdAt: { gte: dayStart, lte: dayEnd },
-      },
-    });
-
-    const msgCount = await prisma.message.count({
-      where: {
-        conversation: { shopId: shop.id },
-        createdAt: { gte: dayStart, lte: dayEnd },
-      },
-    });
-
+    const dayStart = new Date(now); dayStart.setDate(now.getDate() - i); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart); dayEnd.setHours(23, 59, 59, 999);
+    const [count, msgCount] = await Promise.all([
+      prisma.conversation.count({ where: { shopId: shop.id, createdAt: { gte: dayStart, lte: dayEnd } } }),
+      prisma.message.count({ where: { conversation: { shopId: shop.id }, createdAt: { gte: dayStart, lte: dayEnd } } }),
+    ]);
     dailyData.push({
-      date: dayStart.toLocaleDateString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-      }),
       shortDay: dayStart.toLocaleDateString("en-US", { weekday: "short" }),
       conversations: count,
       messages: msgCount,
     });
   }
 
-  // ── Recent conversations ──
   const recentConversations = await prisma.conversation.findMany({
     where: { shopId: shop.id },
     orderBy: { lastMessageAt: "desc" },
     take: 5,
     include: {
-      messages: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-      },
-      _count: {
-        select: {
-          messages: { where: { isRead: false, senderType: "customer" } },
-        },
-      },
+      messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      _count: { select: { messages: { where: { isRead: false, senderType: "customer" } } } },
     },
   });
 
-  // ── Average messages per conversation ──
-  const avgMessages =
-    totalConversations > 0
-      ? Math.round(totalMessages / totalConversations)
-      : 0;
-
-  // ── Resolution rate ──
-  const resolutionRate =
-    totalConversations > 0
-      ? Math.round((closedConversations / totalConversations) * 100)
-      : 0;
+  const avgMessages = totalConversations > 0 ? Math.round(totalMessages / totalConversations) : 0;
+  const resolutionRate = totalConversations > 0 ? Math.round((closedConversations / totalConversations) * 100) : 0;
 
   return json({
     shop,
     stats: {
-      totalConversations,
-      openConversations,
-      closedConversations,
-      totalMessages,
-      todayConversations,
-      todayMessages,
-      weekConversations,
-      weekMessages,
-      monthConversations,
-      customerMessages,
-      agentMessages,
-      unreadMessages,
-      avgMessages,
-      resolutionRate,
+      totalConversations, openConversations, closedConversations, totalMessages,
+      todayConversations, todayMessages, weekConversations, weekMessages,
+      monthConversations, customerMessages, agentMessages, unreadMessages,
+      avgMessages, resolutionRate,
     },
     dailyData,
     recentConversations,
   });
 };
 
+// ─── ICONS ───
+const IconChat = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+const IconMsg = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" />
+  </svg>
+);
+const IconOpen = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+const IconUnread = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </svg>
+);
+const IconTrend = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" />
+  </svg>
+);
+const IconArrow = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+  </svg>
+);
+
+// ─── ANIMATED COUNTER ───
+function AnimatedNumber({ value }: { value: number }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    let start = 0;
+    const step = Math.ceil(value / (800 / 16));
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= value) { setDisplay(value); clearInterval(timer); }
+      else setDisplay(start);
+    }, 16);
+    return () => clearInterval(timer);
+  }, [value]);
+  return <>{display}</>;
+}
+
+// ─── SPARKLINE ───
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  const max = Math.max(...data, 1);
+  const w = 80, h = 32;
+  const points = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - (v / max) * h}`).join(" ");
+  return (
+    <svg width={w} height={h} style={{ opacity: 0.45 }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ─── BAR CHART ───
+function BarChart({ data, color }: { data: { shortDay: string; value: number }[]; color: string }) {
+  const max = Math.max(...data.map(d => d.value), 1);
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", height: "140px", padding: "0 8px" }}>
+      {data.map((d, i) => (
+        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", height: "100%" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", width: "100%" }}>
+            <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, marginBottom: "4px" }}>{d.value > 0 ? d.value : ""}</span>
+            <div style={{
+              width: "100%", maxWidth: "36px",
+              height: `${Math.max((d.value / max) * 100, 4)}%`,
+              background: d.value > 0 ? `linear-gradient(180deg, ${color}bb, ${color})` : "#f1f5f9",
+              borderRadius: "6px 6px 0 0",
+              transition: `height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 0.05}s`,
+              boxShadow: d.value > 0 ? `0 4px 12px ${color}30` : "none",
+            }} />
+          </div>
+          <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>{d.shortDay}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── SECTION HEADING ───
+function SectionHeading({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div className="qc-section-heading">
+      <div className="qc-section-heading-title">{title}</div>
+      {sub && <div className="qc-section-heading-sub">{sub}</div>}
+    </div>
+  );
+}
+
+function SidebarLabel({ children }: { children: string }) {
+  return <div className="qc-section-label">{children}</div>;
+}
+
 // ─── COMPONENT ───
 export default function AppIndex() {
-  const { shop, stats, dailyData, recentConversations } =
-    useLoaderData<typeof loader>();
+  const { shop, stats, dailyData, recentConversations } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  const maxConvos = Math.max(...dailyData.map((d: any) => d.conversations), 1);
-  const maxMsgs = Math.max(...dailyData.map((d: any) => d.messages), 1);
-
   const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMin = Math.floor(diffMs / 60000);
-    const diffHr = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHr / 24);
-
+    const diffMin = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
     if (diffMin < 1) return "Just now";
     if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHr < 24) return `${diffHr}h ago`;
-    return `${diffDay}d ago`;
+    if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h ago`;
+    return `${Math.floor(diffMin / 1440)}d ago`;
   };
 
-  const getStatusBadge = (status: string) => {
-    if (status === "open") return <Badge tone="attention">Open</Badge>;
-    return <Badge>Closed</Badge>;
-  };
+  const convSparkline = dailyData.map((d: any) => d.conversations);
+  const msgSparkline = dailyData.map((d: any) => d.messages);
+
+  const statCards = [
+    {
+      label: "New Chats", value: stats.todayConversations, icon: <IconChat />,
+      gradient: "linear-gradient(135deg, #e8eaf6 0%, #dde1f5 100%)",
+      iconBg: "#c5caf0", iconColor: "#4f46e5", textColor: "#1e1b4b", subColor: "#6366f1",
+      sparkline: convSparkline, sparkColor: "#6366f1", badge: null,
+    },
+    {
+      label: "Messages", value: stats.todayMessages, icon: <IconMsg />,
+      gradient: "linear-gradient(135deg, #e6f7f1 0%, #d1f0e6 100%)",
+      iconBg: "#a7e0cc", iconColor: "#059669", textColor: "#064e3b", subColor: "#10b981",
+      sparkline: msgSparkline, sparkColor: "#10b981", badge: null,
+    },
+    {
+      label: "Open Chats", value: stats.openConversations, icon: <IconOpen />,
+      gradient: "linear-gradient(135deg, #fef3e2 0%, #fde8c8 100%)",
+      iconBg: "#fcd59a", iconColor: "#d97706", textColor: "#451a03", subColor: "#f59e0b",
+      sparkline: convSparkline, sparkColor: "#f59e0b",
+      badge: stats.openConversations > 0 ? "Active" : null,
+    },
+    {
+      label: "Unread", value: stats.unreadMessages, icon: <IconUnread />,
+      gradient: "linear-gradient(135deg, #fce8e8 0%, #fad5d5 100%)",
+      iconBg: "#f5b0b0", iconColor: "#dc2626", textColor: "#450a0a", subColor: "#ef4444",
+      sparkline: msgSparkline, sparkColor: "#ef4444",
+      badge: stats.unreadMessages > 0 ? "Pending" : null,
+    },
+  ];
+
+  const avatarColors = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+  const avatarBgs = ["#eef2ff", "#f0fdf4", "#fffbeb", "#fef2f2", "#f5f3ff"];
 
   return (
-    <Page>
+    <div className="qc-root">
       <TitleBar title="QuikChat Dashboard" />
+      <div className="qc-container">
 
-      <BlockStack gap="500">
+        {/* ── Unread Banner ── */}
         {stats.unreadMessages > 0 && (
-          <Card>
-            <InlineStack align="space-between" blockAlign="center">
-              <InlineStack gap="300" blockAlign="center">
-                <Box
-                  background="bg-fill-critical"
-                  padding="200"
-                  borderRadius="200"
-                >
-                  <Text as="span" variant="headingSm" tone="text-inverse">
-                    {stats.unreadMessages}
-                  </Text>
-                </Box>
-                <Text as="p" variant="bodyMd" fontWeight="semibold">
-                  unread message{stats.unreadMessages !== 1 ? "s" : ""} waiting
-                  for reply
-                </Text>
-              </InlineStack>
-              <Button variant="primary" onClick={() => navigate("/app/chat")}>
-                View Chats
-              </Button>
-            </InlineStack>
-          </Card>
+          <div className="qc-banner">
+            <div className="qc-banner-circle-1" />
+            <div className="qc-banner-circle-2" />
+            <div style={{ display: "flex", alignItems: "center", gap: "16px", zIndex: 1 }}>
+              <div className="qc-banner-count">{stats.unreadMessages}</div>
+              <div>
+                <div className="qc-banner-title">Unread messages waiting</div>
+                <div className="qc-banner-sub">Customers are waiting for your reply</div>
+              </div>
+            </div>
+            <button className="qc-banner-btn" onClick={() => navigate("/app/chat")}>View Chats →</button>
+          </div>
         )}
 
-        {/* Today's Overview */}
-        <Text as="h2" variant="headingMd">
-          Today
-        </Text>
-        <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
-          <Card>
-            <BlockStack gap="200">
-              <Text as="p" variant="bodySm" tone="subdued">
-                New Chats
-              </Text>
-              <Text as="p" variant="headingXl" fontWeight="bold">
-                {stats.todayConversations}
-              </Text>
-            </BlockStack>
-          </Card>
-          <Card>
-            <BlockStack gap="200">
-              <Text as="p" variant="bodySm" tone="subdued">
-                Messages
-              </Text>
-              <Text as="p" variant="headingXl" fontWeight="bold">
-                {stats.todayMessages}
-              </Text>
-            </BlockStack>
-          </Card>
-          <Card>
-            <BlockStack gap="200">
-              <Text as="p" variant="bodySm" tone="subdued">
-                Open Chats
-              </Text>
-              <InlineStack gap="200" blockAlign="center">
-                <Text as="p" variant="headingXl" fontWeight="bold">
-                  {stats.openConversations}
-                </Text>
-                {stats.openConversations > 0 && (
-                  <Badge tone="attention">Active</Badge>
+        {/* ── Page Header ── */}
+        <div className="qc-page-header">
+          <div>
+            <div className="qc-page-title">Dashboard</div>
+            <div className="qc-page-subtitle">Today's overview</div>
+          </div>
+          <div className="qc-date-chip">
+            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+          </div>
+        </div>
+
+        {/* ── Stat Cards ── */}
+        <div className="qc-stat-grid">
+          {statCards.map((card, i) => (
+            <div key={i} className="qc-stat-card" style={{ background: card.gradient }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
+                <div style={{ background: card.iconBg, borderRadius: "12px", width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", color: card.iconColor }}>
+                  {card.icon}
+                </div>
+                {card.badge && (
+                  <span className="qc-badge" style={{ background: "rgba(255,255,255,0.6)", color: card.iconColor }}>
+                    {card.badge}
+                  </span>
                 )}
-              </InlineStack>
-            </BlockStack>
-          </Card>
-          <Card>
-            <BlockStack gap="200">
-              <Text as="p" variant="bodySm" tone="subdued">
-                Unread
-              </Text>
-              <InlineStack gap="200" blockAlign="center">
-                <Text as="p" variant="headingXl" fontWeight="bold">
-                  {stats.unreadMessages}
-                </Text>
-                {stats.unreadMessages > 0 && (
-                  <Badge tone="critical">Pending</Badge>
-                )}
-              </InlineStack>
-            </BlockStack>
-          </Card>
-        </InlineGrid>
+              </div>
+              <div style={{ color: card.textColor, fontSize: "34px", fontWeight: 800, lineHeight: 1, marginBottom: "5px", letterSpacing: "-0.03em" }}>
+                <AnimatedNumber value={card.value} />
+              </div>
+              <div style={{ color: card.subColor, fontSize: "13px", fontWeight: 600, marginBottom: "14px" }}>{card.label}</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Sparkline data={card.sparkline} color={card.sparkColor} />
+                <div className="qc-trend-label" style={{ color: card.subColor, opacity: 0.7 }}>
+                  <IconTrend /><span>7d</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
 
-        {/* Main Layout */}
-        <Layout>
-          {/* Left: Charts */}
-          <Layout.Section>
-            <BlockStack gap="400">
-              {/* Last 7 Days Chart */}
-              <Card>
-                <BlockStack gap="400">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Text as="h3" variant="headingSm">
-                      Last 7 Days — Conversations
-                    </Text>
-                    <Text as="p" variant="bodySm" tone="subdued">
-                      {stats.weekConversations} this week
-                    </Text>
-                  </InlineStack>
-                  <Divider />
-                  <Box paddingBlockStart="200">
-                    <InlineStack gap="200" align="space-between">
-                      {dailyData.map((day: any, i: number) => (
-                        <BlockStack key={i} gap="200" inlineAlign="center">
-                          <Box
-                            minHeight="120px"
-                            width="100%"
-                            position="relative"
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                justifyContent: "flex-end",
-                                height: "120px",
-                                alignItems: "center",
-                              }}
-                            >
-                              <Text as="p" variant="bodySm" fontWeight="bold">
-                                {day.conversations}
-                              </Text>
-                              <div
-                                style={{
-                                  width: "32px",
-                                  height: `${Math.max((day.conversations / maxConvos) * 100, 4)}px`,
-                                  backgroundColor:
-                                    day.conversations > 0
-                                      ? shop.brandColor || "#4F46E5"
-                                      : "#e5e7eb",
-                                  borderRadius: "4px 4px 0 0",
-                                  marginTop: "4px",
-                                  transition: "height 0.3s ease",
-                                }}
-                              />
-                            </div>
-                          </Box>
-                          <Text as="p" variant="bodySm" tone="subdued">
-                            {day.shortDay}
-                          </Text>
-                        </BlockStack>
-                      ))}
-                    </InlineStack>
-                  </Box>
-                </BlockStack>
-              </Card>
+        {/* ── Charts + Sidebar ── */}
+        <div className="qc-charts-layout">
+          <div className="qc-charts-col">
+            <div className="qc-card" style={{ padding: "24px" }}>
+              <div className="qc-chart-header">
+                <SectionHeading title="Conversations" sub="Last 7 days" />
+                <span className="qc-chart-pill" style={{ background: "#f0f0ff", color: "#6366f1" }}>{stats.weekConversations} this week</span>
+              </div>
+              <BarChart data={dailyData.map((d: any) => ({ shortDay: d.shortDay, value: d.conversations }))} color="#6366f1" />
+            </div>
+            <div className="qc-card" style={{ padding: "24px" }}>
+              <div className="qc-chart-header">
+                <SectionHeading title="Messages" sub="Last 7 days" />
+                <span className="qc-chart-pill" style={{ background: "#f0fdf4", color: "#10b981" }}>{stats.weekMessages} this week</span>
+              </div>
+              <BarChart data={dailyData.map((d: any) => ({ shortDay: d.shortDay, value: d.messages }))} color="#10b981" />
+            </div>
+          </div>
 
-              {/* Messages Chart */}
-              <Card>
-                <BlockStack gap="400">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Text as="h3" variant="headingSm">
-                      Last 7 Days — Messages
-                    </Text>
-                    <Text as="p" variant="bodySm" tone="subdued">
-                      {stats.weekMessages} this week
-                    </Text>
-                  </InlineStack>
-                  <Divider />
-                  <Box paddingBlockStart="200">
-                    <InlineStack gap="200" align="space-between">
-                      {dailyData.map((day: any, i: number) => (
-                        <BlockStack key={i} gap="200" inlineAlign="center">
-                          <Box minHeight="120px" width="100%">
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                justifyContent: "flex-end",
-                                height: "120px",
-                                alignItems: "center",
-                              }}
-                            >
-                              <Text as="p" variant="bodySm" fontWeight="bold">
-                                {day.messages}
-                              </Text>
-                              <div
-                                style={{
-                                  width: "32px",
-                                  height: `${Math.max((day.messages / maxMsgs) * 100, 4)}px`,
-                                  backgroundColor:
-                                    day.messages > 0 ? "#10b981" : "#e5e7eb",
-                                  borderRadius: "4px 4px 0 0",
-                                  marginTop: "4px",
-                                  transition: "height 0.3s ease",
-                                }}
-                              />
-                            </div>
-                          </Box>
-                          <Text as="p" variant="bodySm" tone="subdued">
-                            {day.shortDay}
-                          </Text>
-                        </BlockStack>
-                      ))}
-                    </InlineStack>
-                  </Box>
-                </BlockStack>
-              </Card>
-            </BlockStack>
-          </Layout.Section>
+          <div className="qc-sidebar-col">
+            <div className="qc-card" style={{ padding: "20px" }}>
+              <SidebarLabel>All Time</SidebarLabel>
+              {[
+                { label: "Total Conversations", value: stats.totalConversations },
+                { label: "Total Messages", value: stats.totalMessages },
+                { label: "This Month", value: stats.monthConversations },
+                { label: "Avg Messages / Chat", value: stats.avgMessages },
+              ].map((item, i, arr) => (
+                <div key={i} className="qc-stat-row" style={{ borderBottom: i < arr.length - 1 ? "1px solid #f8fafc" : "none" }}>
+                  <span className="qc-stat-row-label">{item.label}</span>
+                  <span className="qc-stat-row-value">{item.value}</span>
+                </div>
+              ))}
+            </div>
 
-          {/* Right: Stats Sidebar */}
-          <Layout.Section variant="oneThird">
-            <BlockStack gap="400">
-              {/* All Time Stats */}
-              <Card>
-                <BlockStack gap="300">
-                  <Text as="h3" variant="headingSm">
-                    All Time
-                  </Text>
-                  <Divider />
-                  <BlockStack gap="300">
-                    <InlineStack align="space-between">
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        Total Conversations
-                      </Text>
-                      <Text as="p" variant="bodySm" fontWeight="bold">
-                        {stats.totalConversations}
-                      </Text>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        Total Messages
-                      </Text>
-                      <Text as="p" variant="bodySm" fontWeight="bold">
-                        {stats.totalMessages}
-                      </Text>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        This Month
-                      </Text>
-                      <Text as="p" variant="bodySm" fontWeight="bold">
-                        {stats.monthConversations}
-                      </Text>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        Avg Messages/Chat
-                      </Text>
-                      <Text as="p" variant="bodySm" fontWeight="bold">
-                        {stats.avgMessages}
-                      </Text>
-                    </InlineStack>
-                  </BlockStack>
-                </BlockStack>
-              </Card>
+            <div className="qc-card" style={{ padding: "20px" }}>
+              <SidebarLabel>Resolution Rate</SidebarLabel>
+              <div style={{ marginBottom: "12px" }}>
+                <span className="qc-big-number">{stats.resolutionRate}</span>
+                <span className="qc-big-number-unit">%</span>
+              </div>
+              <div className="qc-progress-bar" style={{ marginBottom: "10px" }}>
+                <div className="qc-progress-fill" style={{ width: `${stats.resolutionRate}%`, background: "linear-gradient(90deg, #667eea, #764ba2)" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "12px", color: "#10b981", fontWeight: 600 }}>✓ {stats.closedConversations} closed</span>
+                <span style={{ fontSize: "12px", color: "#f59e0b", fontWeight: 600 }}>● {stats.openConversations} open</span>
+              </div>
+            </div>
 
-              {/* Resolution Rate */}
-              <Card>
-                <BlockStack gap="300">
-                  <Text as="h3" variant="headingSm">
-                    Resolution Rate
-                  </Text>
-                  <Divider />
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between">
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        Closed / Total
-                      </Text>
-                      <Text as="p" variant="bodySm" fontWeight="bold">
-                        {stats.resolutionRate}%
-                      </Text>
-                    </InlineStack>
-                    <ProgressBar
-                      progress={stats.resolutionRate}
-                      tone="primary"
-                      size="small"
-                    />
-                    <InlineStack align="space-between">
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        {stats.closedConversations} closed
-                      </Text>
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        {stats.openConversations} open
-                      </Text>
-                    </InlineStack>
-                  </BlockStack>
-                </BlockStack>
-              </Card>
+            <div className="qc-card" style={{ padding: "20px" }}>
+              <SidebarLabel>Message Breakdown</SidebarLabel>
+              {[
+                { label: "From Customers", value: stats.customerMessages, bar: "linear-gradient(90deg, #667eea, #764ba2)" },
+                { label: "From Support", value: stats.agentMessages, bar: "linear-gradient(90deg, #10b981, #34d399)" },
+              ].map((item, i) => (
+                <div key={i} style={{ marginBottom: i === 0 ? "16px" : 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <span className="qc-stat-row-label">{item.label}</span>
+                    <span className="qc-stat-row-value" style={{ fontSize: "13px" }}>{item.value}</span>
+                  </div>
+                  <div className="qc-progress-bar">
+                    <div className="qc-progress-fill" style={{ width: stats.totalMessages > 0 ? `${Math.round((item.value / stats.totalMessages) * 100)}%` : "0%", background: item.bar }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
 
-              {/* Message Breakdown */}
-              <Card>
-                <BlockStack gap="300">
-                  <Text as="h3" variant="headingSm">
-                    Message Breakdown
-                  </Text>
-                  <Divider />
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between">
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        From Customers
-                      </Text>
-                      <Text as="p" variant="bodySm" fontWeight="bold">
-                        {stats.customerMessages}
-                      </Text>
-                    </InlineStack>
-                    {stats.totalMessages > 0 && (
-                      <ProgressBar
-                        progress={Math.round(
-                          (stats.customerMessages / stats.totalMessages) * 100,
-                        )}
-                        tone="primary"
-                        size="small"
-                      />
-                    )}
-                    <InlineStack align="space-between">
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        From Support
-                      </Text>
-                      <Text as="p" variant="bodySm" fontWeight="bold">
-                        {stats.agentMessages}
-                      </Text>
-                    </InlineStack>
-                    {stats.totalMessages > 0 && (
-                      <ProgressBar
-                        progress={Math.round(
-                          (stats.agentMessages / stats.totalMessages) * 100,
-                        )}
-                        tone="success"
-                        size="small"
-                      />
-                    )}
-                  </BlockStack>
-                </BlockStack>
-              </Card>
-            </BlockStack>
-          </Layout.Section>
-        </Layout>
+        {/* ── Recent Conversations ── */}
+        <div className="qc-card" style={{ padding: "24px" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+            <div style={{ textAlign: "center", marginBottom: "24px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "6px" }}>
+                <div style={{ flex: 1, height: "1px", background: "linear-gradient(90deg, transparent, #e2e8f0)" }} />
+                <div style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.02em" }}>Recent Conversations</div>
+                <div style={{ flex: 1, height: "1px", background: "linear-gradient(90deg, #e2e8f0, transparent)" }} />
+              </div>
+              <div style={{ fontSize: "12px", color: "#94a3b8" }}>Latest customer interactions</div>
+            </div>
+            <button className="qc-btn-ghost" onClick={() => navigate("/app/chat")}>View all <IconArrow /></button>
+          </div>
+          {recentConversations.length === 0 ? (
+            <div className="qc-empty">
+              <div className="qc-empty-icon">💬</div>
+              <div className="qc-empty-title">No conversations yet</div>
+              <div className="qc-empty-sub">Chats will appear here once customers start messaging</div>
+            </div>
+          ) : (
+            recentConversations.map((conv: any, i: number) => {
+              const lastMsg = conv.messages[0];
+              const unread = conv._count.messages;
+              const ci = i % avatarColors.length;
+              return (
+                <div key={conv.id} className="qc-conv-row">
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0 }}>
+                    <div className="qc-avatar" style={{ background: avatarBgs[ci], color: avatarColors[ci] }}>
+                      {conv.customerName.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "3px" }}>
+                        <span style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>{conv.customerName}</span>
+                        <span className="qc-badge" style={{ background: conv.status === "open" ? "#fef3c7" : "#f1f5f9", color: conv.status === "open" ? "#d97706" : "#64748b" }}>{conv.status}</span>
+                        {unread > 0 && <span className="qc-badge" style={{ background: "#fef2f2", color: "#ef4444" }}>{unread} new</span>}
+                      </div>
+                      {lastMsg && (
+                        <div style={{ fontSize: "13px", color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "400px" }}>
+                          {lastMsg.senderType === "agent" && <span style={{ color: "#6366f1", fontWeight: 600 }}>You: </span>}
+                          {lastMsg.content.length > 60 ? lastMsg.content.substring(0, 60) + "..." : lastMsg.content}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
+                    <span style={{ fontSize: "12px", color: "#cbd5e1" }}>{formatTime(conv.lastMessageAt)}</span>
+                    <button className="qc-open-btn" onClick={() => navigate(`/app/chat/${conv.id}`)}>Open →</button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
 
-        {/* Recent Conversations */}
-        <Card>
-          <BlockStack gap="400">
-            <InlineStack align="space-between" blockAlign="center">
-              <Text as="h3" variant="headingSm">
-                Recent Conversations
-              </Text>
-              <Button variant="plain" onClick={() => navigate("/app/chat")}>
-                View all
-              </Button>
-            </InlineStack>
-            <Divider />
+        {/* ── Quick Links ── */}
+        <div className="qc-quicklinks-grid">
+          {[
+            { title: "Chat Support", desc: "View and reply to all customer conversations.", action: () => navigate("/app/chat"), label: "Open Chat Inbox", gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" },
+            { title: "Widget Settings", desc: "Customize your chat widget appearance and messages.", action: () => navigate("/app/chat-settings"), label: "Configure Widget", gradient: "linear-gradient(135deg, #10b981 0%, #34d399 100%)" },
+          ].map((card, i) => (
+            <div key={i} className="qc-card qc-quicklink-card">
+              <div>
+                <div className="qc-quicklink-title">{card.title}</div>
+                <div className="qc-quicklink-desc">{card.desc}</div>
+              </div>
+              <button className="qc-btn-primary" style={{ background: card.gradient, flexShrink: 0, marginLeft: "16px" }} onClick={card.action}>
+                {card.label}
+              </button>
+            </div>
+          ))}
+        </div>
 
-            {recentConversations.length === 0 ? (
-              <Box paddingBlock="400">
-                <BlockStack gap="200" inlineAlign="center">
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    No conversations yet. Chats will appear here once customers
-                    start messaging.
-                  </Text>
-                </BlockStack>
-              </Box>
-            ) : (
-              <BlockStack gap="300">
-                {recentConversations.map((conv: any) => {
-                  const lastMsg = conv.messages[0];
-                  const unread = conv._count.messages;
-
-                  return (
-                    <Box key={conv.id}>
-                      <InlineStack
-                        align="space-between"
-                        blockAlign="center"
-                        gap="400"
-                      >
-                        <InlineStack gap="300" blockAlign="center">
-                          <Avatar
-                            initials={conv.customerName
-                              .charAt(0)
-                              .toUpperCase()}
-                            size="sm"
-                          />
-                          <BlockStack gap="050">
-                            <InlineStack gap="200" blockAlign="center">
-                              <Text
-                                as="span"
-                                variant="bodySm"
-                                fontWeight="semibold"
-                              >
-                                {conv.customerName}
-                              </Text>
-                              {getStatusBadge(conv.status)}
-                              {unread > 0 && (
-                                <Badge tone="critical">{unread}</Badge>
-                              )}
-                            </InlineStack>
-                            {lastMsg && (
-                              <Text as="p" variant="bodySm" tone="subdued">
-                                {lastMsg.senderType === "agent" && "You: "}
-                                {lastMsg.content.length > 50
-                                  ? lastMsg.content.substring(0, 50) + "..."
-                                  : lastMsg.content}
-                              </Text>
-                            )}
-                          </BlockStack>
-                        </InlineStack>
-
-                        <InlineStack gap="200" blockAlign="center">
-                          <Text as="span" variant="bodySm" tone="subdued">
-                            {formatTime(conv.lastMessageAt)}
-                          </Text>
-                          <Button
-                            size="slim"
-                            onClick={() => navigate(`/app/chat/${conv.id}`)}
-                          >
-                            Open
-                          </Button>
-                        </InlineStack>
-                      </InlineStack>
-                      <Box paddingBlockStart="300">
-                        <Divider />
-                      </Box>
-                    </Box>
-                  );
-                })}
-              </BlockStack>
-            )}
-          </BlockStack>
-        </Card>
-
-        {/* Quick Links */}
-        <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
-          <Card>
-            <BlockStack gap="300">
-              <Text as="h3" variant="headingSm">
-                Chat Support
-              </Text>
-              <Text as="p" variant="bodySm" tone="subdued">
-                View and reply to all customer conversations.
-              </Text>
-              <Button onClick={() => navigate("/app/chat")}>
-                Open Chat Inbox
-              </Button>
-            </BlockStack>
-          </Card>
-          <Card>
-            <BlockStack gap="300">
-              <Text as="h3" variant="headingSm">
-                Widget Settings
-              </Text>
-              <Text as="p" variant="bodySm" tone="subdued">
-                Customize your chat widget appearance and messages.
-              </Text>
-              <Button onClick={() => navigate("/app/chat-settings")}>
-                Configure Widget
-              </Button>
-            </BlockStack>
-          </Card>
-        </InlineGrid>
-      </BlockStack>
-    </Page>
+      </div>
+    </div>
   );
 }

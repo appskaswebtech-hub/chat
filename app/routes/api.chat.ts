@@ -146,6 +146,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     return json({ success: true, message }, { headers });
   }
+  // ── Save push subscription ──
+  if (intent === "subscribe-push") {
+    const { conversationId, subscription } = body;
+    if (!conversationId || !subscription) {
+      return json({ error: "Missing data" }, { status: 400, headers });
+    }
+
+    await prisma.pushSubscription.create({
+      data: {
+        conversationId,
+        endpoint: subscription.endpoint,
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+      },
+    });
+
+    return json({ success: true }, { headers });
+  }
+
 
   return json({ error: "Unknown intent" }, { status: 400, headers });
 };
