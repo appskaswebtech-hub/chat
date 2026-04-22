@@ -34,6 +34,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             set -e
+            git config --global --add safe.directory /home/chat.kaswebtechsolutions.com/public_html/CHAT
             cd /home/chat.kaswebtechsolutions.com/public_html/CHAT
             echo "📥 Pulling latest code..."
             git fetch origin main
